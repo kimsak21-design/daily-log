@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Log × Notion</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+/* ── 라이트 모드 기본 변수 ── */
+:root {
+  --bg:       #ffffff;
+  --surface:  #f8f9fa;
+  --surface2: #f1f3f5;
+  --border:   #dee2e6;
+  --border2:  #ced4da;
+  --text:     #111111;   /* 기본 검정 */
+  --muted:    #6c757d;
+  --col-plus:   #e03131; /* 빨간 */
+  --col-minus:  #1971c2; /* 파란 */
+  --col-sector: #7048e8; /* 보라 */
+  --col-leader: #e03131; /* 대장 빨간 */
+  --col-date:   #495057;
+  --sunday:   #e03131;
+  --saturday: #1971c2;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ── HEADER ── */
+header { padding: 12px 24px; border-bottom: 2px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: #fff; }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #fff; background: #111; padding: 4px 12px; border-radius: 4px; letter-spacing: .08em; }
+.notion-badge { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); background: var(--surface2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 4px; display: flex; align-items: center; gap: 6px; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #adb5bd; transition: background .3s; }
+.sync-dot.connected { background: #2b9348; box-shadow: 0 0 5px #2b9348; }
+.sync-dot.syncing   { background: #1971c2; animation: pulse .8s infinite; }
+.sync-dot.error     { background: var(--col-plus); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── SETUP ── */
+.setup-panel { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; flex-direction: column; gap: 10px; }
+.setup-panel.hidden { display: none; }
+.setup-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #1971c2; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; }
+.setup-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.setup-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 200px; }
+.setup-field label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+.setup-field input { background: #fff; border: 1px solid var(--border2); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 8px 12px; border-radius: 6px; width: 100%; }
+.setup-field input:focus { outline: none; border-color: #868e96; }
+.setup-field input::placeholder { color: #adb5bd; }
+.btn-sm { background: #111; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity .15s; }
+.btn-sm:hover { opacity: .75; }
+.setup-hint { font-size: 11px; color: var(--muted); line-height: 1.8; font-family: 'JetBrains Mono', monospace; }
+
+/* ── MAIN ── */
+.main { display: grid; grid-template-columns: 460px 1fr; flex: 1; }
+
+/* ── LEFT ── */
+.left-panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 18px; gap: 14px; overflow-y: auto; background: #fff; }
+.panel-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+
+.format-box { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); line-height: 2.1; }
+
+.input-group { display: flex; flex-direction: column; gap: 6px; }
+.input-group label { font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+textarea { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.9; padding: 10px 12px; border-radius: 6px; resize: vertical; min-height: 100px; width: 100%; }
+textarea:focus { outline: none; border-color: #868e96; }
+textarea::placeholder { color: #adb5bd; }
+
+/* ── 색상 미리보기 박스 ── */
+.rich-preview {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 2;
+  padding: 10px 12px; border-radius: 6px; min-height: 60px; width: 100%;
+  background: #fff; border: 1px solid var(--border2);
+  white-space: pre-wrap; word-break: break-all; color: var(--text);
+  overflow-y: auto; max-height: 280px;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   색상 규칙 CSS 클래스
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   .c-plus    : 빨간 글자  (+값 또는 [NQ +], [KP +] 전체)
+   .c-minus   : 파란 글자  (-값 전체)
+   .c-sector  : 보라 글자  ([주도섹터_] 전체)
+   .c-leader  : 빨간 글자  ([대장_] 전체)
+   .c-date    : 회색 글자  날짜
+   .seg-down  : 파란 그라데이션 배경  (악화 구간 → )
+   .seg-up    : 빨간 그라데이션 배경  (개선 구간 → )
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.c-plus   { color: var(--col-plus);   font-weight: 700; }
+.c-minus  { color: var(--col-minus);  font-weight: 700; }
+.c-sector { color: var(--col-sector); font-weight: 700; }
+.c-leader { color: var(--col-leader); font-weight: 700; }
+.c-date   { color: var(--col-date);   font-weight: 600; }
+
+/* 악화 구간 배경 : 파란 그라데이션 */
+.seg-down {
+  background: linear-gradient(90deg, rgba(25,113,194,.18), rgba(56,189,248,.10));
+  border-radius: 3px; padding: 0 3px;
+}
+/* 개선 구간 배경 : 빨간 그라데이션 */
+.seg-up {
+  background: linear-gradient(90deg, rgba(224,49,49,.18), rgba(255,120,50,.10));
+  border-radius: 3px; padding: 0 3px;
+}
+
+/* ── PARSED PREVIEW ── */
+.parsed-preview { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+.parsed-day { border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 4px; }
+.parsed-day:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+.parsed-day-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #1971c2; font-weight: 700; margin-bottom: 4px; }
+.parsed-row { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.parsed-key { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); width: 60px; flex-shrink: 0; }
+.parsed-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); background: #fff; color: var(--text); max-width: 310px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parsed-val.empty { color: #adb5bd; border-style: dashed; }
+.parsed-val.leader { color: var(--col-leader); font-weight: 700; }
+.parsed-val.sector { color: var(--col-sector); font-weight: 700; }
+
+.save-count { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; text-align: right; }
+
+.btn-save { background: #111; color: #fff; border: none; border-radius: 6px; padding: 11px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity .15s; }
+.btn-save:hover { opacity: .8; }
+.btn-save:disabled { opacity: .35; cursor: not-allowed; }
+.spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; display: none; }
+.spinning .spinner { display: block; }
+.spinning .btn-label { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.saved-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.saved-list::-webkit-scrollbar { width: 3px; }
+.saved-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.saved-item { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; cursor: pointer; transition: border-color .15s; }
+.saved-item:hover { border-color: #868e96; }
+.saved-item-text { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); word-break: break-all; line-height: 1.6; }
+.btn-del { background: none; border: none; color: #adb5bd; cursor: pointer; font-size: 13px; padding: 0; flex-shrink: 0; }
+.btn-del:hover { color: var(--col-plus); }
+.empty-msg { font-size: 12px; color: #adb5bd; text-align: center; padding: 12px 0; font-style: italic; }
+
+/* ── RIGHT: CALENDAR ── */
+.right-panel { padding: 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; background: var(--surface); }
+.cal-header { display: flex; align-items: center; gap: 10px; }
+.cal-nav { background: #fff; border: 1px solid var(--border); color: var(--text); width: 34px; height: 34px; border-radius: 6px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: border-color .15s; }
+.cal-nav:hover { border-color: #868e96; }
+.cal-month-label { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; flex: 1; color: var(--text); }
+.btn-refresh { background: #fff; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: border-color .15s; }
+.btn-refresh:hover { border-color: #868e96; color: var(--text); }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.leg-item { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+
+/* ── CALENDAR GRID ── */
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
+.cal-dow { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted); padding: 7px 0; font-weight: 700; }
+.cal-dow.sun { color: var(--sunday); }
+.cal-dow.sat { color: var(--saturday); }
+
+.cal-cell { background: #fff; border: 1px solid var(--border); border-radius: 6px; min-height: 160px; padding: 8px; display: flex; flex-direction: column; gap: 3px; }
+.cal-cell.empty { background: transparent; border-color: transparent; }
+.cal-cell.today { border: 2px solid #111; }
+.cal-cell:not(.empty):hover { border-color: #868e96; }
+
+.cal-day-num { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; color: #495057; line-height: 1; margin-bottom: 3px; }
+.cal-cell.today    .cal-day-num { color: #111; }
+.cal-cell.sunday   .cal-day-num { color: var(--sunday); }
+.cal-cell.saturday .cal-day-num { color: var(--saturday); }
+
+.cal-tags { display: flex; flex-direction: column; gap: 3px; }
+.cal-tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 5px; border-radius: 3px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); line-height: 1.5; word-break: break-all; white-space: normal; }
+/* color classes work inside cal-tag too */
+
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(16px); padding: 10px 20px; border-radius: 6px; font-weight: 700; font-size: 13px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 999; font-family: 'Noto Sans KR', sans-serif; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 900px) {
+  .main { grid-template-columns: 1fr; }
+  .left-panel { border-right: none; border-bottom: 1px solid var(--border); }
+  .cal-cell { min-height: 110px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <div class="logo">DAILY LOG</div>
+    <div class="notion-badge">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncLabel">Notion 미연결</span>
+    </div>
+  </div>
+  <button class="btn-sm" id="btnToggleSetup"
+    style="background:var(--surface2);color:var(--text);border:1px solid var(--border);font-size:12px;padding:6px 12px;">
+    ⚙ 연결 설정
+  </button>
+</header>
+
+<!-- SETUP -->
+<div class="setup-panel" id="setupPanel">
+  <div class="setup-title">🔗 Notion 연결 설정</div>
+  <div class="setup-row">
+    <div class="setup-field">
+      <label>Integration Token</label>
+      <input type="password" id="inputToken" placeholder="secret_xxxxxxxxxxxxxxxxxxxx"/>
+    </div>
+    <div class="setup-field">
+      <label>Database ID</label>
+      <input type="text" id="inputDbId" placeholder="32자리 Database ID"/>
+    </div>
+    <button class="btn-sm" id="btnConnect">연결 테스트</button>
+  </div>
+  <div class="setup-hint">
+    DB 속성: <b>이름</b>(Title) · <b>날짜</b>(Date) · <b>NQ</b>(Text) · <b>뉴스1</b>(Text) · <b>KP</b>(Text) · <b>주도섹터</b>(Text) · <b>뉴스2</b>(Text) · <b>대장</b>(Text)
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT -->
+  <div class="left-panel">
+    <div class="panel-title">📝 일지 입력 (최대 10일)</div>
+
+    <div class="format-box">
+      <b>형식:</b> YYYY.MM.DD.Ddd_[NQ %][뉴스_] [KP ]_[주도섹터_][뉴스_] →[대장_]<br>
+      · <span class="c-plus">[NQ +값]</span> 전체 → 빨간색<br>
+      · <span class="c-plus">[KP +값]</span> 전체 → 빨간색 &nbsp;|&nbsp; <span class="c-minus">[-값]</span> 전체 → 파란색<br>
+      · <span class="seg-down">[KP +값 → -값]</span> 악화 구간 → 파란 그라데이션 배경<br>
+      · <span class="seg-up">[-값 → 보합]</span> 개선 구간 → 빨간 그라데이션 배경<br>
+      · <span class="c-sector">[주도섹터_]</span> → 보라색 &nbsp;|&nbsp; <span class="c-leader">[대장_]</span> → 빨간색
+    </div>
+
+    <div class="input-group">
+      <label>문장 입력 (여러 줄 = 여러 날짜, 최대 10일)</label>
+      <textarea id="logInput" rows="4"
+        placeholder="2026.06.19.Fri_[NQ +2.44%][뉴스_애플-인텔 칩동맹] [KP +2.5%최고가 → -2.2% → 보합 ]_[주도섹터_하이닉스 쏠림][뉴스_] →[대장_삼전-닉스-삼기]"></textarea>
+    </div>
+
+    <div class="input-group">
+      <label>🎨 색상 미리보기</label>
+      <div class="rich-preview" id="richPreview">
+        <span style="color:#adb5bd;font-style:italic">문장을 입력하면 색상이 표시됩니다</span>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label>파싱 결과</label>
+      <div class="parsed-preview" id="parsedPreview">
+        <div class="empty-msg">문장을 입력하면 자동 파싱됩니다</div>
+      </div>
+    </div>
+
+    <div class="save-count" id="saveCount"></div>
+
+    <button class="btn-save" id="btnSave">
+      <div class="spinner"></div>
+      <span class="btn-label">📅 노션에 저장 + 캘린더 반영</span>
+    </button>
+
+    <div class="panel-title">💾 저장된 일지</div>
+    <div class="saved-list" id="savedList">
+      <div class="empty-msg">아직 저장된 일지가 없습니다</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: CALENDAR -->
+  <div class="right-panel">
+    <div class="panel-title">📅 캘린더</div>
+    <div class="cal-header">
+      <button class="cal-nav" id="prevMonth">‹</button>
+      <div class="cal-month-label" id="monthLabel"></div>
+      <button class="cal-nav" id="nextMonth">›</button>
+      <button class="btn-refresh" id="btnRefresh">↻ 노션 동기화</button>
+    </div>
+    <div class="legend">
+      <div class="leg-item"><span class="c-plus" style="font-size:14px">+값</span>&nbsp;빨간</div>
+      <div class="leg-item"><span class="c-minus" style="font-size:14px">-값</span>&nbsp;파란</div>
+      <div class="leg-item"><span class="c-sector">섹터</span>&nbsp;보라</div>
+      <div class="leg-item"><span class="c-leader">대장</span>&nbsp;빨간</div>
+      <div class="leg-item"><span class="seg-down" style="padding:1px 5px">악화→</span></div>
+      <div class="leg-item"><span class="seg-up" style="padding:1px 5px">개선→</span></div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════
+const PROXY_URL = 'https://notion-proxy.kimsak21.workers.dev';
+
+// ══════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════
+let token   = localStorage.getItem('notionToken') || '';
+let dbId    = localStorage.getItem('notionDbId')  || '';
+let entries = JSON.parse(localStorage.getItem('dailyLogs') || '[]');
+const today = new Date();
+let currentYear = today.getFullYear(), currentMonth = today.getMonth();
+
+const setupPanel = document.getElementById('setupPanel');
+const inputToken = document.getElementById('inputToken');
+const inputDbId  = document.getElementById('inputDbId');
+if (token) inputToken.value = token;
+if (dbId)  inputDbId.value  = dbId;
+if (token && dbId) { updateSyncStatus('connected'); setupPanel.classList.add('hidden'); }
+document.getElementById('btnToggleSetup').addEventListener('click', () => setupPanel.classList.toggle('hidden'));
+
+// ══════════════════════════════════════════════════
+//  COLOR ENGINE
+// 규칙:
+//  [NQ +X...]   → 전체 bracket-plus (빨간)
+//  [KP +X → -Y → ...] → 각 세그먼트별 색상 + 구간 배경
+//    · 첫 값이 + → c-plus (빨간)
+//    · -값 → c-minus (파란)
+//    · +X → -Y 구간 → seg-down (파란 배경)
+//    · -Y → 보합 구간 → seg-up (빨간 배경)
+//  [주도섹터_...] → 전체 c-sector (보라)
+//  [대장_...]     → 전체 c-leader (빨간)
+//  [뉴스_...]     → 색상 없음 (검정)
+// ══════════════════════════════════════════════════
+
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// 숫자 추출: "+2.5%최고가" → 2.5, "-2.2%" → -2.2, "보합" → null
+function extractNum(s) {
+  const m = (s||'').trim().match(/^([+-]?\d+\.?\d*)/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+// 세그먼트가 양수/음수/중립인지 판단
+function signOf(s) {
+  const n = extractNum(s.trim());
+  if (n !== null) return n > 0 ? 'plus' : n < 0 ? 'minus' : 'zero';
+  if (/보합|횡보|유지/i.test(s)) return 'neutral';
+  if (/상승|급등|강세|반등/i.test(s)) return 'plus';
+  if (/하락|급락|약세|조정/i.test(s)) return 'minus';
+  return 'zero';
+}
+
+// prev → next 방향: 개선(up/빨강) vs 악화(down/파랑)
+function arrowDir(prev, next) {
+  const ps = signOf(prev), ns = signOf(next);
+  const pn = extractNum(prev.trim()), nn = extractNum(next.trim());
+
+  // 숫자 비교 가능하면 직접 비교
+  if (pn !== null && nn !== null) return nn > pn ? 'up' : nn < pn ? 'down' : null;
+
+  // 숫자+방향 조합
+  if (ns === 'neutral') {
+    if (ps === 'minus') return 'up';    // 음수 → 보합 = 개선
+    if (ps === 'plus')  return 'down';  // 양수 → 보합 = 악화
+  }
+  if (ps === 'minus' && ns === 'plus')  return 'up';
+  if (ps === 'plus'  && ns === 'minus') return 'down';
+  return null;
+}
+
+// 세그먼트 텍스트에 글자색 클래스 적용
+function wrapSign(text) {
+  const s = signOf(text);
+  const e = esc(text);
+  if (s === 'plus')  return `<span class="c-plus">${e}</span>`;
+  if (s === 'minus') return `<span class="c-minus">${e}</span>`;
+  return e; // zero/neutral → 검정 그대로
+}
+
+// ── 브라켓 내부 렌더링 (화살표 세그먼트 처리) ──────────────
+// bracketSign: 'plus' | 'minus' | 'sector' | 'leader' | 'news' | null
+function renderBracketInner(inner, bracketSign) {
+
+  // 주도섹터 → 전체 보라
+  if (bracketSign === 'sector') {
+    return `<span class="c-sector">${esc(inner)}</span>`;
+  }
+  // 대장 → 전체 빨간
+  if (bracketSign === 'leader') {
+    return `<span class="c-leader">${esc(inner)}</span>`;
+  }
+  // 뉴스 → 색상 없음
+  if (bracketSign === 'news') {
+    return esc(inner);
+  }
+
+  // NQ / KP / 기타 — 화살표 세그먼트 분리
+  const parts = inner.split(/\s*(→|->)\s*/);
+  // parts = [seg0, sep, seg1, sep, seg2, ...]
+
+  if (parts.length === 1) {
+    // 화살표 없음 — 첫 값 부호에 따라 전체 색상
+    return wrapSign(inner);
+  }
+
+  // 화살표 있음
+  let html = '';
+  // 첫 세그먼트
+  html += wrapSign(parts[0]);
+
+  for (let i = 1; i < parts.length; i += 2) {
+    // parts[i] = separator ('→' or '->')
+    const prevSeg = parts[i - 1] || '';
+    const nextSeg = parts[i + 1] || '';
+    const dir = arrowDir(prevSeg.trim(), nextSeg.trim());
+    const segCls = dir === 'up' ? 'seg-up' : dir === 'down' ? 'seg-down' : '';
+
+    const nextHtml = wrapSign(nextSeg);
+    const arrowContent = ` → ${nextHtml}`;
+
+    if (segCls) {
+      html += `<span class="${segCls}">${arrowContent}</span>`;
+    } else {
+      html += arrowContent;
+    }
+  }
+  return html;
+}
+
+// ── 브라켓 타입 감지 ──────────────────────────────────────
+function detectBracket(inner) {
+  if (/^NQ[\s%+\-\d]/i.test(inner))  return 'nq';
+  if (/^KP[\s+\-\d]/i.test(inner))   return 'kp';
+  if (/^뉴스/.test(inner))           return 'news';
+  if (/^주도섹터/.test(inner))       return 'sector';
+  if (/^대장/.test(inner))           return 'leader';
+  return 'other';
+}
+
+// bracketSign: NQ/KP/other에서 전체 부호 (화살표 있을 때는 null)
+function getBracketSign(inner, btype) {
+  if (btype === 'sector') return 'sector';
+  if (btype === 'leader') return 'leader';
+  if (btype === 'news')   return 'news';
+  return null; // NQ, KP, other → 세그먼트별 처리
+}
+
+// ── 한 줄 전체 렌더링 ──────────────────────────────────────
+function colorizeLine(rawLine) {
+  if (!rawLine.trim()) return '';
+  let result = '';
+  let i = 0;
+  const s = rawLine;
+
+  while (i < s.length) {
+    if (s[i] === '[') {
+      const close = s.indexOf(']', i);
+      if (close === -1) { result += esc(s.slice(i)); break; }
+
+      const inner = s.slice(i + 1, close);
+      const btype = detectBracket(inner);
+      const bsign = getBracketSign(inner, btype);
+      const rendered = renderBracketInner(inner, bsign);
+      result += `[${rendered}]`;
+      i = close + 1;
+
+    } else {
+      // 날짜 패턴
+      const dm = s.slice(i).match(/^(\d{4}\.\d{2}\.\d{2}(?:\.\w+)?)/);
+      if (dm) {
+        result += `<span class="c-date">${esc(dm[1])}</span>`;
+        i += dm[1].length;
+      } else {
+        result += esc(s[i]);
+        i++;
+      }
+    }
+  }
+  return result;
+}
+
+// ── 색상 미리보기 렌더링 ──────────────────────────────────
+function renderRichPreview(text) {
+  const box = document.getElementById('richPreview');
+  if (!text.trim()) {
+    box.innerHTML = '<span style="color:#adb5bd;font-style:italic">문장을 입력하면 색상이 표시됩니다</span>';
+    return;
+  }
+  box.innerHTML = text.split('\n').slice(0, 10).map(colorizeLine).join('\n');
+}
+
+// ══════════════════════════════════════════════════
+//  PARSER
+// ══════════════════════════════════════════════════
+function parseLine(text) {
+  const r = { raw:text.trim(), date:null, nq:null, news1:null, kp:null, sector:null, news2:null, leader:null };
+  const dm = text.match(/(\d{4})\.(\d{2})\.(\d{2})/);
+  if (dm) r.date = `${dm[1]}-${dm[2]}-${dm[3]}`;
+  const nq  = text.match(/\[NQ\s*([^\]]+)\]/i);           if (nq)  r.nq     = nq[1].trim();
+  const kp  = text.match(/\[KP\s*([^\]]+)\]/i);           if (kp)  r.kp     = kp[1].trim();
+  const sec = text.match(/\[주도섹터[_ ]*([^\]]*)\]/i);   if (sec) r.sector = sec[1].trim()||null;
+  const ldr = text.match(/\[대장[_ ]*([^\]]*)\]/i);       if (ldr) r.leader = ldr[1].trim()||null;
+  const na  = [...text.matchAll(/\[뉴스[_ ]*([^\]]*)\]/gi)];
+  if (na[0]) r.news1 = na[0][1].trim()||null;
+  if (na[1]) r.news2 = na[1][1].trim()||null;
+  return r;
+}
+
+function parseAllLines(text) {
+  return text.split('\n').map(l=>l.trim()).filter(l=>l).slice(0,10).map(parseLine);
+}
+
+function renderPreview(text) {
+  const box = document.getElementById('parsedPreview');
+  const cnt = document.getElementById('saveCount');
+  const valid = parseAllLines(text||'').filter(p=>p.date);
+  if (!valid.length) {
+    box.innerHTML = '<div class="empty-msg">문장을 입력하면 자동 파싱됩니다</div>';
+    cnt.textContent = ''; return;
+  }
+  cnt.textContent = `${valid.length}일치 인식됨`;
+  box.innerHTML = valid.map(p => {
+    const rows = [
+      {k:'날짜',   v:p.date,   cls:''},
+      {k:'NQ',     v:p.nq,     cls:''},
+      {k:'뉴스①', v:p.news1,  cls:''},
+      {k:'KP',     v:p.kp,     cls:''},
+      {k:'섹터',   v:p.sector, cls:'sector'},
+      {k:'뉴스②', v:p.news2,  cls:''},
+      {k:'대장',   v:p.leader, cls:'leader'},
+    ];
+    return `<div class="parsed-day">
+      <div class="parsed-day-title">${p.date}</div>
+      ${rows.map(r=>`
+        <div class="parsed-row">
+          <span class="parsed-key">${r.k}</span>
+          <span class="parsed-val ${r.v ? r.cls : 'empty'}">${r.v||'비어있음'}</span>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+const logInput = document.getElementById('logInput');
+function onInput() { const v=logInput.value; renderRichPreview(v); renderPreview(v); }
+logInput.addEventListener('input', onInput);
+logInput.addEventListener('paste', ()=>setTimeout(onInput, 50));
+
+// ══════════════════════════════════════════════════
+//  SAVED LIST
+// ══════════════════════════════════════════════════
+function renderSavedList() {
+  const el = document.getElementById('savedList');
+  if (!entries.length) { el.innerHTML='<div class="empty-msg">아직 저장된 일지가 없습니다</div>'; return; }
+  [...entries].sort((a,b)=>b.date.localeCompare(a.date)).forEach(e=>{
+    const div = document.createElement('div');
+    div.className = 'saved-item';
+    div.onclick = ()=>loadEntry(e.date);
+    const txt = document.createElement('div');
+    txt.className = 'saved-item-text';
+    txt.innerHTML = colorizeLine(e.raw);
+    const del = document.createElement('button');
+    del.className = 'btn-del';
+    del.textContent = '✕';
+    del.onclick = (ev)=>deleteEntry(ev, e.date);
+    div.appendChild(txt); div.appendChild(del);
+    el.appendChild(div);
+  });
+}
+
+function rebuildSavedList() {
+  const el = document.getElementById('savedList');
+  el.innerHTML = '';
+  if (!entries.length) { el.innerHTML='<div class="empty-msg">아직 저장된 일지가 없습니다</div>'; return; }
+  renderSavedList();
+}
+
+function loadEntry(date) {
+  const e = entries.find(x=>x.date===date);
+  if (!e) return;
+  logInput.value = e.raw;
+  renderRichPreview(e.raw); renderPreview(e.raw);
+}
+
+// ══════════════════════════════════════════════════
+//  CALENDAR
+// ══════════════════════════════════════════════════
+const DOW = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+
+function calColorField(text) {
+  if (!text) return '';
+  // Render field value with arrow segments
+  const btype = detectBracket(text);
+  const bsign = getBracketSign(text, btype);
+  return renderBracketInner(text, bsign);
+}
+
+function renderCalendar() {
+  document.getElementById('monthLabel').textContent =
+    `${currentYear} . ${String(currentMonth+1).padStart(2,'0')}`;
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const firstDay    = new Date(currentYear, currentMonth, 1).getDay();
+  const daysInMonth = new Date(currentYear, currentMonth+1, 0).getDate();
+
+  const headers = DOW.map((d,i)=>
+    `<div class="cal-dow ${i===0?'sun':i===6?'sat':''}">${d}</div>`).join('');
+
+  let cells = '';
+  for (let i=0;i<firstDay;i++) cells += '<div class="cal-cell empty"></div>';
+
+  for (let d=1;d<=daysInMonth;d++) {
+    const ds  = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const ent = entries.find(e=>e.date===ds);
+    const dow = (firstDay+d-1)%7;
+    let cls = 'cal-cell';
+    if (ds===todayStr) cls += ' today';
+    if (dow===0)       cls += ' sunday';
+    if (dow===6)       cls += ' saturday';
+
+    let tags = '';
+    if (ent) {
+      if (ent.nq)     tags += `<div class="cal-tag">NQ ${calColorField(ent.nq)}</div>`;
+      if (ent.news1)  tags += `<div class="cal-tag">📰 ${esc(ent.news1)}</div>`;
+      if (ent.kp)     tags += `<div class="cal-tag">KP ${calColorField(ent.kp)}</div>`;
+      if (ent.sector) tags += `<div class="cal-tag"><span class="c-sector">${esc(ent.sector)}</span></div>`;
+      if (ent.news2)  tags += `<div class="cal-tag">📰 ${esc(ent.news2)}</div>`;
+      if (ent.leader) tags += `<div class="cal-tag"><span class="c-leader">👑 ${esc(ent.leader)}</span></div>`;
+    }
+    cells += `<div class="${cls}"><div class="cal-day-num">${d}</div><div class="cal-tags">${tags}</div></div>`;
+  }
+  document.getElementById('calGrid').innerHTML = headers + cells;
+}
+
+document.getElementById('prevMonth').addEventListener('click',()=>{if(--currentMonth<0){currentMonth=11;currentYear--;}renderCalendar();});
+document.getElementById('nextMonth').addEventListener('click',()=>{if(++currentMonth>11){currentMonth=0;currentYear++;}renderCalendar();});
+
+// ══════════════════════════════════════════════════
+//  NOTION API
+// ══════════════════════════════════════════════════
+async function notionRequest(endpoint, method='GET', body=null) {
+  const res = await fetch(PROXY_URL+endpoint, {
+    method,
+    headers:{'Authorization':`Bearer ${token}`,'Notion-Version':'2022-06-28','Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : null
+  });
+  if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.message||`HTTP ${res.status}`); }
+  return res.json();
+}
+
+document.getElementById('btnConnect').addEventListener('click', async ()=>{
+  token = inputToken.value.trim();
+  dbId  = inputDbId.value.trim().replace(/-/g,'');
+  if (!token||!dbId) { showToast('⚠ 토큰과 DB ID를 입력하세요','#e03131'); return; }
+  updateSyncStatus('syncing');
+  try {
+    await notionRequest(`/databases/${dbId}`);
+    localStorage.setItem('notionToken',token); localStorage.setItem('notionDbId',dbId);
+    updateSyncStatus('connected'); setupPanel.classList.add('hidden');
+    showToast('✓ Notion 연결 성공!'); await syncFromNotion();
+  } catch(e) { updateSyncStatus('error'); showToast('✗ 연결 실패: '+e.message,'#e03131'); }
+});
+
+async function syncFromNotion() {
+  if (!token||!dbId) return;
+  updateSyncStatus('syncing');
+  document.getElementById('btnRefresh').textContent='↻ 동기화 중...';
+  try {
+    const data = await notionRequest(`/databases/${dbId}/query`,'POST',{
+      sorts:[{property:'날짜',direction:'descending'}], page_size:100
+    });
+    entries = data.results.map(page=>{
+      const p=page.properties;
+      return {
+        raw:    p['이름']?.title?.[0]?.plain_text||'',
+        date:   p['날짜']?.date?.start||null,
+        nq:     p['NQ']?.rich_text?.[0]?.plain_text||null,
+        news1:  p['뉴스1']?.rich_text?.[0]?.plain_text||null,
+        kp:     p['KP']?.rich_text?.[0]?.plain_text||null,
+        sector: p['주도섹터']?.rich_text?.[0]?.plain_text||null,
+        news2:  p['뉴스2']?.rich_text?.[0]?.plain_text||null,
+        leader: p['대장']?.rich_text?.[0]?.plain_text||null,
+        pageId: page.id
+      };
+    }).filter(e=>e.date);
+    localStorage.setItem('dailyLogs',JSON.stringify(entries));
+    rebuildSavedList(); renderCalendar();
+    updateSyncStatus('connected'); showToast('✓ 동기화 완료');
+  } catch(e) { updateSyncStatus('error'); showToast('✗ 동기화 실패: '+e.message,'#e03131'); }
+  finally { document.getElementById('btnRefresh').textContent='↻ 노션 동기화'; }
+}
+document.getElementById('btnRefresh').addEventListener('click', syncFromNotion);
+
+document.getElementById('btnSave').addEventListener('click', async ()=>{
+  const valid = parseAllLines(logInput.value).filter(p=>p.date);
+  if (!valid.length) { showToast('⚠ 날짜를 인식하지 못했습니다','#e03131'); return; }
+  const btn = document.getElementById('btnSave');
+  btn.disabled=true; btn.classList.add('spinning');
+  let saved=0;
+  try {
+    for (const p of valid) {
+      const existing = entries.find(e=>e.date===p.date);
+      const props = {
+        '이름'    :{title    :[{text:{content:p.raw}}]},
+        '날짜'    :{date     :{start:p.date}},
+        'NQ'      :{rich_text:[{text:{content:p.nq    ||''}}]},
+        '뉴스1'   :{rich_text:[{text:{content:p.news1 ||''}}]},
+        'KP'      :{rich_text:[{text:{content:p.kp    ||''}}]},
+        '주도섹터':{rich_text:[{text:{content:p.sector||''}}]},
+        '뉴스2'   :{rich_text:[{text:{content:p.news2 ||''}}]},
+        '대장'    :{rich_text:[{text:{content:p.leader||''}}]},
+      };
+      if (token&&dbId) {
+        if (existing?.pageId) await notionRequest(`/pages/${existing.pageId}`,'PATCH',{properties:props});
+        else { const res=await notionRequest('/pages','POST',{parent:{database_id:dbId},properties:props}); p.pageId=res.id; }
+      }
+      const idx = entries.findIndex(e=>e.date===p.date);
+      if (idx>=0) entries[idx]={...p}; else entries.push(p);
+      saved++;
+    }
+    localStorage.setItem('dailyLogs',JSON.stringify(entries));
+    logInput.value=''; renderRichPreview(''); renderPreview('');
+    rebuildSavedList();
+    const d=new Date(valid[0].date+'T00:00:00');
+    currentYear=d.getFullYear(); currentMonth=d.getMonth();
+    renderCalendar();
+    showToast(token&&dbId?`✓ ${saved}일치 노션에 저장`:`✓ ${saved}일치 로컬에 저장`);
+  } catch(e) { showToast('✗ 저장 실패: '+e.message,'#e03131'); }
+  finally { btn.disabled=false; btn.classList.remove('spinning'); }
+});
+
+async function deleteEntry(ev, date) {
+  ev.stopPropagation();
+  const e=entries.find(x=>x.date===date);
+  if (!e) return;
+  if (e.pageId&&token&&dbId) {
+    try { await notionRequest(`/pages/${e.pageId}`,'PATCH',{archived:true}); }
+    catch { showToast('⚠ 노션 삭제 실패, 로컬만 삭제','#fd7e14'); }
+  }
+  entries=entries.filter(x=>x.date!==date);
+  localStorage.setItem('dailyLogs',JSON.stringify(entries));
+  rebuildSavedList(); renderCalendar();
+  showToast('삭제되었습니다','#e03131');
+}
+
+function updateSyncStatus(state) {
+  document.getElementById('syncDot').className='sync-dot '+state;
+  document.getElementById('syncLabel').textContent={
+    connected:'Notion 연결됨',syncing:'동기화 중...',error:'연결 오류'
+  }[state]||'Notion 미연결';
+}
+
+function showToast(msg, bg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.background=bg||'#2b9348'; t.style.color='#fff';
+  t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ── INIT ──
+rebuildSavedList(); renderCalendar();
+if (token&&dbId) syncFromNotion();
+</script>
+</body>
+</html>
