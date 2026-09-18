@@ -474,7 +474,7 @@ function renderChart(){
   const W=canvas.parentElement.clientWidth-32;
   const PAD={top:16,right:20,bottom:32,left:52};
   const CHART_H=200;
-  const SCHED_H=scheduleRows>0?16+scheduleRows*28+8:0;
+  const SCHED_H=scheduleRows>0?8+scheduleRows*28+8:0;
   const TOTAL_H=CHART_H+SCHED_H;
   canvas.style.width=W+'px';canvas.style.height=TOTAL_H+'px';
   canvas.width=W*dpr;canvas.height=TOTAL_H*dpr;
@@ -512,10 +512,7 @@ function renderChart(){
     });
     // TIMELINE
     if(scheduleRows>0){
-      const TL_TOP=CHART_H+16;
-      ctx.fillStyle='#adb5bd';ctx.font='10px JetBrains Mono,monospace';ctx.textAlign='left';ctx.fillText('📌 일정',PAD.left,TL_TOP-4);
-      const todayIdx=candles.findIndex(c=>c.date===todayStr);
-      if(todayIdx>=0){ctx.strokeStyle='rgba(224,49,49,.4)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(toX(todayIdx),CHART_H);ctx.lineTo(toX(todayIdx),TOTAL_H);ctx.stroke();}
+      const TL_TOP=CHART_H+8;
       scheduleItems.forEach((s,rowIdx)=>{
         const rowY=TL_TOP+rowIdx*28;const startSlot=dateToSlot(s.startDate);
         if(s.endDate){
@@ -526,8 +523,7 @@ function renderChart(){
           ctx.fillStyle='#fff';ctx.font='bold 10px JetBrains Mono,monospace';ctx.textAlign='left';ctx.fillText(s.content,x1+6,rowY+13);
         } else {
           if(startSlot<0)return;const x=toX(startSlot);
-          ctx.fillStyle='rgba(12,166,120,.9)';ctx.beginPath();ctx.arc(x,rowY+10,5,0,Math.PI*2);ctx.fill();
-          ctx.fillStyle='#0ca678';ctx.font='10px Noto Sans KR,sans-serif';ctx.textAlign='left';ctx.fillText(s.content,x+9,rowY+14);
+          ctx.fillStyle='#0ca678';ctx.font='10px Noto Sans KR,sans-serif';ctx.textAlign='left';ctx.fillText(s.content,x,rowY+14);
         }
       });
     }
