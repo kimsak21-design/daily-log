@@ -517,67 +517,62 @@ function renderChart(){
 
   drawBase();
 
-  // ── HTML 타임라인 렌더 ──
+  // ── HTML 타임라인 렌더 (단순 리스트) ──
   function renderTimelineHTML() {
     const tlDiv = document.getElementById('timelineDiv');
     if (!tlDiv) return;
     tlDiv.innerHTML = '';
     if (!scheduleItems.length) return;
 
-    // 캔들 날짜 → X위치(px) 계산
-    function slotLeft(dateStr) {
-      const idx = candles.findIndex(c => c.date === dateStr);
-      if (idx < 0) return null;
-      // 캔버스 PAD.left 기준 퍼센트
-      return ((idx + 0.5) / N * 100).toFixed(2) + '%';
-    }
+    // 캔들 날짜 범위 내에 있는 일정만
+    const candleDates = candles.map(c => c.date);
+    const minDate = candleDates[0];
+    const maxDate = candleDates[candleDates.length - 1];
 
-    // 전체 너비에서 좌우 패딩 고려한 래퍼
-    tlDiv.style.cssText = `position:relative;margin:4px 0 0 0;padding-left:${PAD.left}px;padding-right:${PAD.right}px;`;
+    const visible = scheduleItems.filter(s =>
+      s.startDate >= minDate && s.startDate <= maxDate
+    );
+    if (!visible.length) return;
 
-    let hasVisible = false;
-    scheduleItems.forEach((s, i) => {
+    // 캔버스 날짜 x위치와 동기화된 가로 바 컨테이너
+    // 캔버스와 같은 너비, PAD.left 만큼 왼쪽 여백
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `position:relative;width:100%;height:${visible.length * 24 + 8}px;margin-top:2px;`;
+
+    visible.forEach((s, rowIdx) => {
       const startIdx = candles.findIndex(c => c.date === s.startDate);
+      if (startIdx < 0) return;
 
-      if (s.endDate) {
-        const endIdx = candles.findIndex(c => c.date === s.endDate);
-        // 시작 또는 끝 중 하나라도 캔들에 있어야 표시
-        if (startIdx < 0 && endIdx < 0) return;
-        hasVisible = true;
+      const endIdx = s.endDate ? candles.findIndex(c => c.date === s.endDate) : -1;
 
-        const x1pct = startIdx >= 0 ? (startIdx + 0.5) / N * 100 : 0;
-        const x2pct = endIdx   >= 0 ? (endIdx   + 0.5) / N * 100 : 100;
-        const leftPct  = x1pct.toFixed(2) + '%';
-        const widthPct = Math.max(x2pct - x1pct, 1).toFixed(2) + '%';
+      // X 위치: 캔버스와 동일 공식
+      const x1ratio = (startIdx + 0.5) / N;
+      const x2ratio = endIdx >= 0 ? (endIdx + 0.5) / N : x1ratio;
 
-        const row = document.createElement('div');
-        row.style.cssText = 'position:relative;height:22px;margin-bottom:4px;';
+      // CSS calc: PAD.left + ratio * (100% - PAD.left - PAD.right)
+      const innerW = `(100% - ${PAD.left + PAD.right}px)`;
+      const leftCSS  = `calc(${PAD.left}px + ${x1ratio.toFixed(4)} * ${innerW})`;
+      const rightCSS = `calc(${PAD.left}px + ${x2ratio.toFixed(4)} * ${innerW})`;
+      const top = rowIdx * 24 + 4;
+
+      if (s.endDate && endIdx >= 0) {
+        const widthCSS = `calc((${x2ratio.toFixed(4)} - ${x1ratio.toFixed(4)}) * ${innerW})`;
         const bar = document.createElement('div');
-        bar.style.cssText = `position:absolute;left:${leftPct};width:${widthPct};height:18px;top:2px;border-radius:4px;background:linear-gradient(90deg,rgba(12,166,120,.9),rgba(12,166,120,.25));display:flex;align-items:center;padding:0 6px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;`;
+        bar.style.cssText = `position:absolute;top:${top}px;left:${leftCSS};width:${widthCSS};min-width:40px;height:18px;border-radius:3px;background:linear-gradient(90deg,rgba(12,166,120,.85),rgba(12,166,120,.2));display:flex;align-items:center;padding:0 5px;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;box-sizing:border-box;`;
         bar.textContent = s.content;
-        bar.title = `${s.startDate} ~ ${s.endDate}`;
         bar.onclick = () => openSchedulePopup(s.entryDate, s.scheduleIndex, s.content, s.endDate||'');
-        row.appendChild(bar);
-        tlDiv.appendChild(row);
-
+        wrap.appendChild(bar);
       } else {
-        // 단일 날짜 — 캔들에 없으면 스킵
-        if (startIdx < 0) return;
-        hasVisible = true;
-
-        const leftPct = ((startIdx + 0.5) / N * 100).toFixed(2) + '%';
-        const row = document.createElement('div');
-        row.style.cssText = 'position:relative;height:22px;margin-bottom:4px;';
-        const label = document.createElement('div');
-        label.style.cssText = `position:absolute;left:${leftPct};font-family:'JetBrains Mono',monospace;font-size:10px;color:#0ca678;white-space:nowrap;top:4px;`;
-        label.textContent = '● ' + s.content;
-        label.onclick = () => openSchedulePopup(s.entryDate, s.scheduleIndex, s.content, '');
-        row.appendChild(label);
-        tlDiv.appendChild(row);
+        const lbl = document.createElement('div');
+        lbl.style.cssText = `position:absolute;top:${top}px;left:${leftCSS};font-family:'JetBrains Mono',monospace;font-size:9px;color:#0ca678;white-space:nowrap;cursor:pointer;`;
+        lbl.textContent = '▸ ' + s.content;
+        lbl.onclick = () => openSchedulePopup(s.entryDate, s.scheduleIndex, s.content, '');
+        wrap.appendChild(lbl);
       }
     });
 
-    if (!hasVisible) tlDiv.innerHTML = '';
+    tlDiv.style.cssText = 'width:100%;overflow:hidden;';
+    tlDiv.appendChild(wrap);
   }
 
   renderTimelineHTML();
