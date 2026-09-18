@@ -685,9 +685,29 @@ document.getElementById('btnConnect').addEventListener('click',async()=>{
 });
 async function syncFromNotion(){
   if(!token||!dbId)return;updateSyncStatus('syncing');document.getElementById('btnRefresh').textContent='↻ 동기화 중...';
-  try{const data=await notionRequest(`/databases/${dbId}/query`,'POST',{sorts:[{property:'날짜',direction:'descending'}],page_size:100});
-    entries=data.results.map(page=>{const p=page.properties;const raw=p['이름']?.title?.[0]?.plain_text||'';return{raw,date:p['날짜']?.date?.start||null,nq:p['NQ']?.rich_text?.[0]?.plain_text||null,news1:p['뉴스1']?.rich_text?.[0]?.plain_text||null,kp:p['KP']?.rich_text?.[0]?.plain_text||null,sector:p['주도섹터']?.rich_text?.[0]?.plain_text||null,news2:p['뉴스2']?.rich_text?.[0]?.plain_text||null,leader:p['대장']?.rich_text?.[0]?.plain_text||null,regret:p['아쉬운맥점']?.rich_text?.[0]?.plain_text||null,schedules:parseSchedules(raw),pageId:page.id};}).filter(e=>e.date);
-    localStorage.setItem('dailyLogs',JSON.stringify(entries));rebuildSavedList();renderCalendar();renderChart();updateSyncStatus('connected');showToast('✓ 동기화 완료');
+  try{
+    const data=await notionRequest(`/databases/${dbId}/query`,'POST',{sorts:[{property:'날짜',direction:'descending'}],page_size:100});
+    entries=data.results.map(page=>{
+      const p=page.properties;const raw=p['이름']?.title?.[0]?.plain_text||'';
+      // 노션 DB의 아쉬운맥점 값 가져오기, 없으면 raw에서 파싱
+      let regret=p['아쉬운맥점']?.rich_text?.[0]?.plain_text||null;
+      if(!regret){const rg=raw.match(/_아쉬운\s*맥점\s*:([^\n]*)/i);regret=rg?rg[1].trim()||null:null;}
+      return{raw,date:p['날짜']?.date?.start||null,nq:p['NQ']?.rich_text?.[0]?.plain_text||null,news1:p['뉴스1']?.rich_text?.[0]?.plain_text||null,kp:p['KP']?.rich_text?.[0]?.plain_text||null,sector:p['주도섹터']?.rich_text?.[0]?.plain_text||null,news2:p['뉴스2']?.rich_text?.[0]?.plain_text||null,leader:p['대장']?.rich_text?.[0]?.plain_text||null,regret,schedules:parseSchedules(raw),pageId:page.id};
+    }).filter(e=>e.date);
+
+    // 아쉬운맥점이 raw엔 있지만 노션 DB엔 없는 항목 → 노션에 자동 업데이트
+    const toUpdate=entries.filter(e=>e.regret&&e.pageId&&!data.results.find(r=>r.id===e.pageId)?.properties['아쉬운맥점']?.rich_text?.[0]?.plain_text);
+    if(toUpdate.length>0){
+      document.getElementById('btnRefresh').textContent=`↻ 아쉬운맥점 업데이트 중... (${toUpdate.length}건)`;
+      for(const e of toUpdate){
+        try{await notionRequest(`/pages/${e.pageId}`,'PATCH',{properties:{'아쉬운맥점':{rich_text:[{text:{content:e.regret}}]}}});}
+        catch{}
+      }
+      showToast(`✓ 아쉬운맥점 ${toUpdate.length}건 노션 업데이트 완료`);
+    }
+
+    localStorage.setItem('dailyLogs',JSON.stringify(entries));rebuildSavedList();renderCalendar();renderChart();updateSyncStatus('connected');
+    if(!toUpdate.length)showToast('✓ 동기화 완료');
   }catch(e){updateSyncStatus('error');showToast('✗ 동기화 실패: '+e.message,'#e03131');}
   finally{document.getElementById('btnRefresh').textContent='↻ 노션 동기화';}
 }
