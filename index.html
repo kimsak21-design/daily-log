@@ -692,18 +692,29 @@ async function syncFromNotion(){
       // 노션 DB의 아쉬운맥점 값 가져오기, 없으면 raw에서 파싱
       let regret=p['아쉬운맥점']?.rich_text?.[0]?.plain_text||null;
       if(!regret){const rg=raw.match(/_아쉬운\s*맥점\s*:([^\n]*)/i);regret=rg?rg[1].trim()||null:null;}
-      return{raw,date:p['날짜']?.date?.start||null,nq:p['NQ']?.rich_text?.[0]?.plain_text||null,news1:p['뉴스1']?.rich_text?.[0]?.plain_text||null,kp:p['KP']?.rich_text?.[0]?.plain_text||null,sector:p['주도섹터']?.rich_text?.[0]?.plain_text||null,news2:p['뉴스2']?.rich_text?.[0]?.plain_text||null,leader:p['대장']?.rich_text?.[0]?.plain_text||null,regret,schedules:parseSchedules(raw),pageId:page.id};
+      // 일정도 DB에 없으면 raw에서 파싱
+      const schedules=parseSchedules(raw);
+      return{raw,date:p['날짜']?.date?.start||null,nq:p['NQ']?.rich_text?.[0]?.plain_text||null,news1:p['뉴스1']?.rich_text?.[0]?.plain_text||null,kp:p['KP']?.rich_text?.[0]?.plain_text||null,sector:p['주도섹터']?.rich_text?.[0]?.plain_text||null,news2:p['뉴스2']?.rich_text?.[0]?.plain_text||null,leader:p['대장']?.rich_text?.[0]?.plain_text||null,regret,schedules,pageId:page.id};
     }).filter(e=>e.date);
 
-    // 아쉬운맥점이 raw엔 있지만 노션 DB엔 없는 항목 → 노션에 자동 업데이트
-    const toUpdate=entries.filter(e=>e.regret&&e.pageId&&!data.results.find(r=>r.id===e.pageId)?.properties['아쉬운맥점']?.rich_text?.[0]?.plain_text);
+    // 아쉬운맥점 또는 일정이 raw엔 있지만 노션 DB엔 없는 항목 → 노션에 자동 업데이트
+    const toUpdate=entries.filter(e=>{
+      const dbPage=data.results.find(r=>r.id===e.pageId);
+      const hasRegretInDB=dbPage?.properties['아쉬운맥점']?.rich_text?.[0]?.plain_text;
+      const hasScheduleInDB=dbPage?.properties['일정']?.rich_text?.[0]?.plain_text;
+      const needsRegret=e.regret&&!hasRegretInDB;
+      const needsSchedule=e.schedules?.length>0&&!hasScheduleInDB;
+      return needsRegret||needsSchedule;
+    });
     if(toUpdate.length>0){
-      document.getElementById('btnRefresh').textContent=`↻ 아쉬운맥점 업데이트 중... (${toUpdate.length}건)`;
+      document.getElementById('btnRefresh').textContent=`↻ 업데이트 중... (${toUpdate.length}건)`;
       for(const e of toUpdate){
-        try{await notionRequest(`/pages/${e.pageId}`,'PATCH',{properties:{'아쉬운맥점':{rich_text:[{text:{content:e.regret}}]}}});}
-        catch{}
+        const props={};
+        if(e.regret)props['아쉬운맥점']={rich_text:[{text:{content:e.regret}}]};
+        if(e.schedules?.length>0)props['일정']={rich_text:[{text:{content:e.schedules.map(s=>(s.endDate?'~'+s.endDate.replace(/-/g,'')+'_':'')+s.content).join('|')}}]};
+        try{await notionRequest(`/pages/${e.pageId}`,'PATCH',{properties:props});}catch{}
       }
-      showToast(`✓ 아쉬운맥점 ${toUpdate.length}건 노션 업데이트 완료`);
+      showToast(`✓ ${toUpdate.length}건 노션 자동 업데이트 완료`);
     }
 
     localStorage.setItem('dailyLogs',JSON.stringify(entries));rebuildSavedList();renderCalendar();renderChart();updateSyncStatus('connected');
