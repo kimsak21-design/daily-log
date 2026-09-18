@@ -521,48 +521,63 @@ function renderChart(){
   function renderTimelineHTML() {
     const tlDiv = document.getElementById('timelineDiv');
     if (!tlDiv) return;
-    if (!scheduleItems.length) { tlDiv.innerHTML = ''; return; }
+    tlDiv.innerHTML = '';
+    if (!scheduleItems.length) return;
 
-    // 날짜→X 위치 계산 (캔버스와 동일한 비율)
-    function datePct(dateStr) {
+    // 캔들 날짜 → X위치(px) 계산
+    function slotLeft(dateStr) {
       const idx = candles.findIndex(c => c.date === dateStr);
-      if (idx < 0) {
-        // 범위 밖 — 가장 가까운 끝으로
-        const first = candles[0]?.date || '';
-        return dateStr < first ? 0 : 100;
-      }
-      return ((idx + 0.5) / N) * 100;
+      if (idx < 0) return null;
+      // 캔버스 PAD.left 기준 퍼센트
+      return ((idx + 0.5) / N * 100).toFixed(2) + '%';
     }
 
-    const leftPx = PAD.left; // y축 라벨 너비와 맞춤
-    const rightPx = PAD.right;
+    // 전체 너비에서 좌우 패딩 고려한 래퍼
+    tlDiv.style.cssText = `position:relative;margin:4px 0 0 0;padding-left:${PAD.left}px;padding-right:${PAD.right}px;`;
 
-    let html = '';
+    let hasVisible = false;
     scheduleItems.forEach((s, i) => {
-      const startPct = datePct(s.startDate);
+      const startIdx = candles.findIndex(c => c.date === s.startDate);
+
       if (s.endDate) {
-        const endPct = datePct(s.endDate);
-        const left = `calc(${leftPx}px + ${startPct}% * (100% - ${leftPx+rightPx}px) / 100)`;
-        const width = `calc(${Math.max(endPct - startPct, 1)}% * (100% - ${leftPx+rightPx}px) / 100)`;
-        html += `<div class="tl-row">
-          <div class="tl-bar"
-            style="left:${left};width:${width};background:linear-gradient(90deg,rgba(12,166,120,.9),rgba(12,166,120,.3));"
-            onclick="openSchedulePopup('${s.entryDate}',${s.scheduleIndex},'${s.content.replace(/'/g,"\\'")}','${s.endDate||''}')"
-            title="${s.startDate} ~ ${s.endDate}">
-            ${s.content}
-          </div>
-        </div>`;
+        const endIdx = candles.findIndex(c => c.date === s.endDate);
+        // 시작 또는 끝 중 하나라도 캔들에 있어야 표시
+        if (startIdx < 0 && endIdx < 0) return;
+        hasVisible = true;
+
+        const x1pct = startIdx >= 0 ? (startIdx + 0.5) / N * 100 : 0;
+        const x2pct = endIdx   >= 0 ? (endIdx   + 0.5) / N * 100 : 100;
+        const leftPct  = x1pct.toFixed(2) + '%';
+        const widthPct = Math.max(x2pct - x1pct, 1).toFixed(2) + '%';
+
+        const row = document.createElement('div');
+        row.style.cssText = 'position:relative;height:22px;margin-bottom:4px;';
+        const bar = document.createElement('div');
+        bar.style.cssText = `position:absolute;left:${leftPct};width:${widthPct};height:18px;top:2px;border-radius:4px;background:linear-gradient(90deg,rgba(12,166,120,.9),rgba(12,166,120,.25));display:flex;align-items:center;padding:0 6px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;`;
+        bar.textContent = s.content;
+        bar.title = `${s.startDate} ~ ${s.endDate}`;
+        bar.onclick = () => openSchedulePopup(s.entryDate, s.scheduleIndex, s.content, s.endDate||'');
+        row.appendChild(bar);
+        tlDiv.appendChild(row);
+
       } else {
-        const left = `calc(${leftPx}px + ${startPct}% * (100% - ${leftPx+rightPx}px) / 100)`;
-        html += `<div class="tl-row">
-          <div class="tl-dot" style="left:${left};"
-            onclick="openSchedulePopup('${s.entryDate}',${s.scheduleIndex},'${s.content.replace(/'/g,"\\'")}','')">
-          </div>
-          <div class="tl-dot-label" style="left:calc(${left} + 12px);">${s.content}</div>
-        </div>`;
+        // 단일 날짜 — 캔들에 없으면 스킵
+        if (startIdx < 0) return;
+        hasVisible = true;
+
+        const leftPct = ((startIdx + 0.5) / N * 100).toFixed(2) + '%';
+        const row = document.createElement('div');
+        row.style.cssText = 'position:relative;height:22px;margin-bottom:4px;';
+        const label = document.createElement('div');
+        label.style.cssText = `position:absolute;left:${leftPct};font-family:'JetBrains Mono',monospace;font-size:10px;color:#0ca678;white-space:nowrap;top:4px;`;
+        label.textContent = '● ' + s.content;
+        label.onclick = () => openSchedulePopup(s.entryDate, s.scheduleIndex, s.content, '');
+        row.appendChild(label);
+        tlDiv.appendChild(row);
       }
     });
-    tlDiv.innerHTML = html;
+
+    if (!hasVisible) tlDiv.innerHTML = '';
   }
 
   renderTimelineHTML();
