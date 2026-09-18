@@ -99,7 +99,9 @@ textarea::placeholder{color:#adb5bd;}
   line-height:1.7;
   margin-top:10px;
   width:100%;
-  min-height:180px; /* 최소 높이 고정으로 깜박임 방지 */
+  min-height:180px;
+  max-height:220px;
+  overflow:hidden;
   transition:border-color .15s, background .15s;
 }
 .candle-tip.active{
@@ -223,14 +225,13 @@ let currentYear=today.getFullYear(),currentMonth=today.getMonth();
 let popupTarget=null;
 // ── 캘린더 항목 표시 토글 상태 ──
 const CAL_FIELDS = [
-  { key:'nq',              label:'NQ',      color:'#e03131', dot:'#e03131' },
-  { key:'news',            label:'뉴스',    color:'#f472b6', dot:'#f472b6' },
-  { key:'kp',              label:'KP',      color:'#fb923c', dot:'#fb923c' },
-  { key:'sector',          label:'섹터',    color:'#7048e8', dot:'#7048e8' },
-  { key:'leader',          label:'대장',    color:'#e03131', dot:'#e03131' },
-  { key:'schedule',        label:'일정',    color:'#0ca678', dot:'#0ca678' },
-  { key:'scheduleContent', label:'일정내용',color:'#0ca678', dot:'#0ca678' },
-  { key:'regret',          label:'아쉬운맥점', color:'#e67700', dot:'#e67700' },
+  { key:'nq',       label:'NQ',        color:'#e03131', dot:'#e03131' },
+  { key:'news',     label:'뉴스',      color:'#f472b6', dot:'#f472b6' },
+  { key:'kp',       label:'KP',        color:'#fb923c', dot:'#fb923c' },
+  { key:'sector',   label:'섹터',      color:'#7048e8', dot:'#7048e8' },
+  { key:'leader',   label:'대장',      color:'#e03131', dot:'#e03131' },
+  { key:'schedule', label:'일정',      color:'#0ca678', dot:'#0ca678' },
+  { key:'regret',   label:'아쉬운맥점',color:'#e67700', dot:'#e67700' },
 ];
 let calVisible = JSON.parse(localStorage.getItem('calVisible') ||
   JSON.stringify(Object.fromEntries(CAL_FIELDS.map(f=>[f.key,true]))));
@@ -385,11 +386,7 @@ function renderCalendar(){
       if(calVisible.schedule&&ent.schedules&&ent.schedules.length)
         ent.schedules.forEach(s=>{
           const endStr = s.endDate ? `~${s.endDate.slice(5).replace('-','/')} ` : '';
-          const label  = `📌 [일정_${endStr}]`;
-          const content= calVisible.scheduleContent && s.content
-            ? `<div style="font-size:10px;color:var(--col-schedule);padding-left:4px;margin-top:1px;white-space:normal;word-break:break-all">${esc(s.content)}</div>`
-            : '';
-          tags+=`<div class="cal-tag"><span class="c-schedule">${label}</span>${content}</div>`;
+          tags+=`<div class="cal-tag"><span class="c-schedule">📌 ${esc(s.content)}${endStr?` (${endStr.trim()})`:''}</span></div>`;
         });
       if(calVisible.regret&&ent.regret)
         tags+=`<div class="cal-tag"><span class="c-regret">💭 아쉬운맥점</span><div style="font-size:10px;color:var(--col-regret);padding-left:4px;margin-top:1px;white-space:normal;word-break:break-all">${esc(ent.regret)}</div></div>`;
@@ -469,7 +466,11 @@ function renderChart(){
   const candles=buildIndexCandles(sorted);
   const scheduleItems=[];
   entries.forEach(e=>{if(!e.schedules||!e.schedules.length)return;e.schedules.forEach((s,idx)=>scheduleItems.push({content:s.content,startDate:e.date,endDate:s.endDate||null,entryDate:e.date,scheduleIndex:idx}));});
-  const scheduleRows=scheduleItems.length;
+  // 캔버스에 표시할 수 있는 일정만 필터 (날짜 범위 내)
+  const sorted_=([...entries].sort((a,b)=>a.date.localeCompare(b.date)));
+  const dateSet=new Set(sorted_.map(e=>e.date));
+  const visibleSchedules=scheduleItems.filter(s=>dateSet.has(s.startDate)||(s.endDate&&[...dateSet].some(d=>d>=s.startDate&&d<=s.endDate)));
+  const scheduleRows=visibleSchedules.length;
   const dpr=window.devicePixelRatio||1;
   const W=canvas.parentElement.clientWidth-32;
   const PAD={top:16,right:20,bottom:32,left:52};
@@ -513,16 +514,20 @@ function renderChart(){
     // TIMELINE
     if(scheduleRows>0){
       const TL_TOP=CHART_H+8;
-      scheduleItems.forEach((s,rowIdx)=>{
-        const rowY=TL_TOP+rowIdx*28;const startSlot=dateToSlot(s.startDate);
+      visibleSchedules.forEach((s,rowIdx)=>{
+        const rowY=TL_TOP+rowIdx*28;
+        if(rowY+20>TOTAL_H)return; // 캔버스 밖으로 나가면 그리지 않음
+        const startSlot=dateToSlot(s.startDate);
         if(s.endDate){
           const endSlot=dateToSlot(s.endDate);
-          const x1=startSlot>=0?toX(startSlot)-slotW/2:PAD.left;const x2=endSlot>=0?toX(endSlot)+slotW/2:W-PAD.right;
+          const x1=startSlot>=0?toX(startSlot)-slotW/2:PAD.left;
+          const x2=endSlot>=0?toX(endSlot)+slotW/2:W-PAD.right;
           const grad=ctx.createLinearGradient(x1,0,x2,0);grad.addColorStop(0,'rgba(12,166,120,.9)');grad.addColorStop(1,'rgba(12,166,120,.15)');
           ctx.fillStyle=grad;ctx.beginPath();ctx.roundRect(x1,rowY,x2-x1,20,3);ctx.fill();
           ctx.fillStyle='#fff';ctx.font='bold 10px JetBrains Mono,monospace';ctx.textAlign='left';ctx.fillText(s.content,x1+6,rowY+13);
         } else {
-          if(startSlot<0)return;const x=toX(startSlot);
+          if(startSlot<0)return;
+          const x=toX(startSlot);
           ctx.fillStyle='#0ca678';ctx.font='10px Noto Sans KR,sans-serif';ctx.textAlign='left';ctx.fillText(s.content,x,rowY+14);
         }
       });
@@ -646,8 +651,8 @@ function renderChart(){
   canvas.onclick=(ev)=>{
     const rect=canvas.getBoundingClientRect();const mx=ev.clientX-rect.left;const my=ev.clientY-rect.top;
     if(my<CHART_H)return;
-    const TL_TOP=CHART_H+16;
-    scheduleItems.forEach((s,rowIdx)=>{
+    const TL_TOP=CHART_H+8;
+    visibleSchedules.forEach((s,rowIdx)=>{
       const rowY=TL_TOP+rowIdx*28;if(my<rowY||my>rowY+22)return;
       const startSlot=dateToSlot(s.startDate);const endSlot=s.endDate?dateToSlot(s.endDate):startSlot;
       const x1=startSlot>=0?toX(startSlot)-slotW/2:PAD.left;const x2=endSlot>=0?toX(endSlot)+slotW/2:W-PAD.right;
