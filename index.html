@@ -515,67 +515,11 @@ function renderChart(){
     });
   }  // end drawBase
 
+  // 타임라인 div 완전히 비움
+  const tlDiv = document.getElementById('timelineDiv');
+  if (tlDiv) tlDiv.innerHTML = '';
+
   drawBase();
-
-  // ── HTML 타임라인 렌더 (단순 리스트) ──
-  function renderTimelineHTML() {
-    const tlDiv = document.getElementById('timelineDiv');
-    if (!tlDiv) return;
-    tlDiv.innerHTML = '';
-    if (!scheduleItems.length) return;
-
-    // 캔들 날짜 범위 내에 있는 일정만
-    const candleDates = candles.map(c => c.date);
-    const minDate = candleDates[0];
-    const maxDate = candleDates[candleDates.length - 1];
-
-    const visible = scheduleItems.filter(s =>
-      s.startDate >= minDate && s.startDate <= maxDate
-    );
-    if (!visible.length) return;
-
-    // 캔버스 날짜 x위치와 동기화된 가로 바 컨테이너
-    // 캔버스와 같은 너비, PAD.left 만큼 왼쪽 여백
-    const wrap = document.createElement('div');
-    wrap.style.cssText = `position:relative;width:100%;height:${visible.length * 24 + 8}px;margin-top:2px;`;
-
-    visible.forEach((s, rowIdx) => {
-      const startIdx = candles.findIndex(c => c.date === s.startDate);
-      if (startIdx < 0) return;
-
-      const endIdx = s.endDate ? candles.findIndex(c => c.date === s.endDate) : -1;
-
-      // X 위치: 캔버스와 동일 공식
-      const x1ratio = (startIdx + 0.5) / N;
-      const x2ratio = endIdx >= 0 ? (endIdx + 0.5) / N : x1ratio;
-
-      // CSS calc: PAD.left + ratio * (100% - PAD.left - PAD.right)
-      const innerW = `(100% - ${PAD.left + PAD.right}px)`;
-      const leftCSS  = `calc(${PAD.left}px + ${x1ratio.toFixed(4)} * ${innerW})`;
-      const rightCSS = `calc(${PAD.left}px + ${x2ratio.toFixed(4)} * ${innerW})`;
-      const top = rowIdx * 24 + 4;
-
-      if (s.endDate && endIdx >= 0) {
-        const widthCSS = `calc((${x2ratio.toFixed(4)} - ${x1ratio.toFixed(4)}) * ${innerW})`;
-        const bar = document.createElement('div');
-        bar.style.cssText = `position:absolute;top:${top}px;left:${leftCSS};width:${widthCSS};min-width:40px;height:18px;border-radius:3px;background:linear-gradient(90deg,rgba(12,166,120,.85),rgba(12,166,120,.2));display:flex;align-items:center;padding:0 5px;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;box-sizing:border-box;`;
-        bar.textContent = s.content;
-        bar.onclick = () => openSchedulePopup(s.entryDate, s.scheduleIndex, s.content, s.endDate||'');
-        wrap.appendChild(bar);
-      } else {
-        const lbl = document.createElement('div');
-        lbl.style.cssText = `position:absolute;top:${top}px;left:${leftCSS};font-family:'JetBrains Mono',monospace;font-size:9px;color:#0ca678;white-space:nowrap;cursor:pointer;`;
-        lbl.textContent = '▸ ' + s.content;
-        lbl.onclick = () => openSchedulePopup(s.entryDate, s.scheduleIndex, s.content, '');
-        wrap.appendChild(lbl);
-      }
-    });
-
-    tlDiv.style.cssText = 'width:100%;overflow:hidden;';
-    tlDiv.appendChild(wrap);
-  }
-
-  renderTimelineHTML();
 
   // ── HIGHLIGHT on hover ──
   function drawHighlight(idx){
